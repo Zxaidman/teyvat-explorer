@@ -27,10 +27,9 @@ describe('official tile scheme', () => {
   });
 
   it('converts game coordinates to full-resolution map pixels', () => {
-    expect(gameToPixel(meta, -7318.5, -5640.6)).toEqual({
-      x: 16887.5,
-      y: 3277.4,
-    });
+    const pixel = gameToPixel(meta, -7318.5, -5640.6);
+    expect(pixel.x).toBeCloseTo(16887.5, 6);
+    expect(pixel.y).toBeCloseTo(3277.4, 6);
   });
 
   it('calculates tile pyramid dimensions at each zoom', () => {

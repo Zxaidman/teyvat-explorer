@@ -1,6 +1,6 @@
 # Teyvat Explorer
 
-**Version 0.2.2** — local-first Genshin Impact exploration tracker.
+**Version 0.3.0** — local-first Genshin Impact exploration tracker.
 
 ## Development
 
@@ -16,7 +16,7 @@ npm run dev
 
 ## Official snapshot setup
 
-Download the latest full snapshot from https://github.com/kxxoling/genshin-map-data/releases and extract it. Import these files in order:
+The latest verified upstream snapshot at this release is [v7.2.0](https://github.com/kxxoling/genshin-map-data/releases/tag/v7.2.0). Download the full archive (`teyvat-full-v7.2.0.tar.gz`) and extract it. The app validates metadata, label hierarchy, point IDs and coordinates before replacing imported records. Import these files in order:
 
 1. `data/teyvat/meta.json`
 2. `data/teyvat/labels.json`
@@ -24,7 +24,7 @@ Download the latest full snapshot from https://github.com/kxxoling/genshin-map-d
 
 The point schema is validated against the upstream consumer's documented shape: `id`, `labelId`, `x`, `y`, and optional `z`. Labels provide category names. The official tile scheme uses `N3`, `N2`, `N1`, and `P0` zoom suffixes; the tile renderer substitutes these explicitly.
 
-The map uses official metadata `origin` and `totalSize` to transform game coordinates to map pixels. Underground points (`z != 0`) are retained but intentionally not drawn until a floor selector is implemented.
+The v7.2.0 metadata uses `origin: [24207, 16411]`, `totalSize: [36864, 32768]` and zoom levels -4 through 0. The map uses the imported metadata `origin` and `totalSize` to transform game coordinates to map pixels. Do not reuse these dimensions for later snapshots without checking their `meta.json`. Underground points (`z != 0`) are retained but intentionally not drawn until a floor selector is implemented.
 
 ## Progress
 
@@ -38,6 +38,6 @@ https://zxaidman.github.io/teyvat-explorer/
 
 ## Privacy and attribution
 
-The UID shown in the UI is informational only. The application does not request HoYoverse credentials, cookies or authentication tokens and cannot infer unopened chests from a UID.
+The application does not request HoYoverse credentials, cookies or authentication tokens. It does not connect to a player account or infer unopened chests from a UID.
 
 Map data and assets are sourced from https://github.com/kxxoling/genshin-map-data. Genshin Impact and its related assets belong to HoYoverse. This is an independent, unofficial project.

@@ -9,7 +9,6 @@ export default function App() {
   const [progress, setProgress] = useState<Record<string, ProgressState>>({});
   const [meta, setMeta] = useState<OfficialMeta | null>(null);
   const [labels, setLabels] = useState<Map<number, string>>(new Map());
-  const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [stateFilter, setStateFilter] = useState('unresolved');
@@ -70,7 +69,6 @@ export default function App() {
       const parsed = parseOfficialPoints(JSON.parse(await file.text()), labels);
       await replaceMarkers(parsed.markers);
       setMarkers(parsed.markers);
-      setSelected(null);
       setSelectedMarker(null);
       setStatus(`Imported ${parsed.report.imported.toLocaleString()} points; skipped ${parsed.report.skipped}. ${parsed.report.warnings.join(' ')}`);
     } catch (error) {

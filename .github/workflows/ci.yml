@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - name: Report dependency advisories
+        run: npm audit || true
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

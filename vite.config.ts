@@ -3,10 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // GitHub Pages project sites are hosted under /<repository-name>/.
+  // GitHub Pages project-site path.
   base: '/teyvat-explorer/',
-  test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-  },
+  test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

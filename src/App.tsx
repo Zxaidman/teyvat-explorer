@@ -98,7 +98,7 @@ export default function App() {
   return (
     <main>
       <header>
-        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.2.2 · VERIFIED TILE SCHEME</small></div>
+        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.3.0 · OFFICIAL SNAPSHOT V7.2.0</small></div>
         <nav>
           <button onClick={exportProgress}>Export progress</button>
           <button onClick={() => metaInput.current?.click()}>Import meta.json</button>

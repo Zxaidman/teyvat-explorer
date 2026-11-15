@@ -229,9 +229,21 @@ function MarkerLayer({ markers, meta, onSelect }: {
   return null;
 }
 
-export default function MapView({ markers, meta, onSelect }: {
+function SelectedMarkerView({ marker, meta }: { marker: Marker | null; meta: OfficialMeta }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!marker) return;
+    const pixel = gameToPixel(meta, marker.x, marker.y);
+    const targetZoom = Math.max(map.getZoom(), -1);
+    map.flyTo([meta.totalSize[1] - pixel.y, pixel.x], Math.min(targetZoom, meta.maxZoom), { duration: 0.35 });
+  }, [map, marker, meta]);
+  return null;
+}
+
+export default function MapView({ markers, meta, selectedMarker, onSelect }: {
   markers: Marker[];
   meta: OfficialMeta;
+  selectedMarker: Marker | null;
   onSelect: (marker: Marker) => void;
 }) {
   const bounds: L.LatLngBoundsExpression = [[0, 0], [meta.totalSize[1], meta.totalSize[0]]];

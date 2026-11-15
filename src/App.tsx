@@ -29,6 +29,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [stateFilter, setStateFilter] = useState('unresolved');
+  const [floorFilter, setFloorFilter] = useState('surface');
   const [status, setStatus] = useState('Loading your saved map data…');
   const [selectedMarker, setSelectedMarker] = useState<Marker | null>(null);
 
@@ -111,9 +112,12 @@ export default function App() {
     const state = progress[marker.id] ?? 'unknown';
     const matchesState = stateFilter === 'all' ||
       (stateFilter === 'unresolved' ? state !== 'collected' : state === stateFilter);
+    const isUnderground = marker.z !== undefined && marker.z !== 0;
+    const matchesFloor = floorFilter === 'all' ||
+      (floorFilter === 'underground' ? isUnderground : !isUnderground);
     const matchesSearch = `${marker.name} ${marker.category}`.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesState && matchesSearch;
-  }), [markers, category, stateFilter, progress, search]);
+    return matchesCategory && matchesState && matchesFloor && matchesSearch;
+  }), [markers, category, stateFilter, floorFilter, progress, search]);
 
   async function setMarkerState(marker: Marker, state: ProgressState) {
     const record = { markerId: marker.id, state, updatedAt: new Date().toISOString() };
@@ -148,10 +152,11 @@ export default function App() {
           <div className="map-canvas">{meta ? <MapView markers={filtered} meta={meta} onSelect={setSelectedMarker}/> :
             <div className="empty"><b>Preparing your map</b><p>The latest official map data is downloaded automatically on first visit.</p></div>}</div>
         </div>
-        <aside className="panel"><small>MARKER EXPLORER</small><h2>Find collectibles</h2>
+        <aside className="panel"><small>MARKER EXPLORER</small><h2>Find collectibles</h2><p className="filter-hint">Filter by category, floor and collection status. Zoom in to reveal individual markers.</p>
           <input placeholder="Search marker category" value={search} onChange={e => setSearch(e.target.value)}/>
           <select value={category} onChange={e => setCategory(e.target.value)}><option>All</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
-          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="unresolved">Not collected</option><option value="all">All states</option><option value="collected">Collected</option><option value="missing">Missing</option><option value="unknown">Unknown</option></select>
+          <select aria-label="Floor visibility" value={floorFilter} onChange={e => setFloorFilter(e.target.value)}><option value="surface">Surface</option><option value="underground">Underground</option><option value="all">All floors</option></select>
+          <select aria-label="Collection status" value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="unresolved">Not collected</option><option value="all">All states</option><option value="collected">Collected</option><option value="missing">Missing</option><option value="unknown">Unknown</option></select>
           <div className="marker-list">{filtered.slice(0, 1200).map(marker => <button key={marker.id} className={selectedMarker?.id === marker.id ? 'active' : ''} onClick={() => setSelectedMarker(marker)}><b>{marker.name}</b><small>{marker.category}</small><i>{progress[marker.id] ?? 'unknown'}</i></button>)}</div>
           {selectedMarker && <div className="detail"><small>SELECTED MARKER</small><b>{selectedMarker.name}</b><div><button onClick={() => setMarkerState(selectedMarker, 'collected')}>Collected</button><button onClick={() => setMarkerState(selectedMarker, 'missing')}>Missing</button><button onClick={() => setMarkerState(selectedMarker, 'unknown')}>Reset</button></div></div>}
         </aside>

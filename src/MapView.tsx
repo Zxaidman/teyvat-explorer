@@ -27,7 +27,24 @@ class OfficialGridLayer extends L.GridLayer {
     image.loading = 'lazy';
     image.referrerPolicy = 'no-referrer';
     image.onload = () => done(undefined, image);
-    image.onerror = () => done(new Error(`Official map tile unavailable: ${coords.z}/${coords.x}/${coords.y}`), image);
+    let usedCdnFallback = false;
+    image.onerror = () => {
+      if (!usedCdnFallback && this.meta.cdnTileUrlTemplate) {
+        usedCdnFallback = true;
+        const fallbackUrl = officialTileUrl(
+          { ...this.meta, tileUrlTemplate: this.meta.cdnTileUrlTemplate },
+          coords.x,
+          coords.y,
+          coords.z,
+        );
+        console.warn('[Teyvat Explorer] Local tile unavailable; trying official CDN', fallbackUrl);
+        image.src = fallbackUrl;
+        return;
+      }
+      const error = new Error(`Official map tile unavailable after local/CDN attempts: ${coords.z}/${coords.x}/${coords.y}`);
+      console.error('[Teyvat Explorer] Tile failed', { coords, localUrl: tilePath, cdnFallback: this.meta.cdnTileUrlTemplate });
+      done(error, image);
+    };
 
     const tilePath = officialTileUrl(this.meta, coords.x, coords.y, coords.z);
     image.src = tilePath.startsWith('https://')

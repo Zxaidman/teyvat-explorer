@@ -12,7 +12,7 @@ const meta: OfficialMeta = {
   minZoom: -4,
   maxZoom: 0,
   tileUrlTemplate:
-    'https://act-webstatic.mihoyo.com/ys-map-op/map/{mapId}/{mapVersion}/{x}_{y}_{suffix}.webp',
+    'tiles/{x}_{y}_{suffix}.webp',
 };
 
 describe('official tile scheme', () => {
@@ -25,7 +25,7 @@ describe('official tile scheme', () => {
 
   it('substitutes all official tile URL placeholders', () => {
     expect(officialTileUrl(meta, 23, 8, -2)).toBe(
-      'https://act-webstatic.mihoyo.com/ys-map-op/map/2/bd70cde160dbd523926208d9fa8961a1/23_8_N2.webp',
+      'tiles/23_8_N2.webp',
     );
   });
 
@@ -65,8 +65,8 @@ describe('official snapshot import validation', () => {
     })).toThrow(/zoom range/);
     expect(() => parseOfficialMeta({
       mapId: 2, mapVersion: 'v', origin: [0, 0], totalSize: [1, 1],
-      minZoom: -1, maxZoom: 0, cdnTileUrlTemplate: 'http://example.com/{x}_{y}_{suffix}',
-    })).toThrow(/HTTPS/);
+      minZoom: -1, maxZoom: 0, tileUrlTemplate: 'http://example.com/{x}_{y}_{suffix}',
+    })).toThrow(/tiles\\/ path or use HTTPS/);
   });
 
   it('walks nested labels and skips duplicate or malformed point records', () => {

@@ -141,7 +141,7 @@ export default function App() {
   return (
     <main>
       <header>
-        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.4.0 · AUTOMATIC MAP SYNC</small></div>
+        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.5.0 · AUTOMATIC MAP SYNC</small></div>
         <nav><button onClick={exportProgress}>Export progress</button></nav>
       </header>
       <section className="intro"><div><small>PLAYER WORKSPACE · ASIA SERVER</small><h1>Explore Teyvat</h1><p>Official map tiles, automatically updated collectibles and locally saved progress.</p></div></section>
@@ -149,7 +149,7 @@ export default function App() {
       <p className="status" role="status" aria-live="polite">{status}</p>
       <section className="workspace">
         <div className="map"><div className="map-heading"><div><small>OFFICIAL TEYVAT MAP</small><b>{meta ? `Map ${meta.mapId} · ${meta.mapVersion.slice(0, 8)}` : 'Loading official map…'}</b></div></div>
-          <div className="map-canvas">{meta ? <MapView markers={filtered} meta={meta} onSelect={setSelectedMarker}/> :
+          <div className="map-canvas">{meta ? <MapView markers={filtered} meta={meta} selectedMarker={selectedMarker} onSelect={setSelectedMarker}/> :
             <div className="empty"><b>Preparing your map</b><p>The latest official map data is downloaded automatically on first visit.</p></div>}</div>
         </div>
         <aside className="panel"><small>MARKER EXPLORER</small><h2>Find collectibles</h2><p className="filter-hint">Filter by category, floor and collection status. Zoom in to reveal individual markers.</p>
@@ -157,7 +157,8 @@ export default function App() {
           <select value={category} onChange={e => setCategory(e.target.value)}><option>All</option>{categories.map(item => <option key={item}>{item}</option>)}</select>
           <select aria-label="Floor visibility" value={floorFilter} onChange={e => setFloorFilter(e.target.value)}><option value="surface">Surface</option><option value="underground">Underground</option><option value="all">All floors</option></select>
           <select aria-label="Collection status" value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="unresolved">Not collected</option><option value="all">All states</option><option value="collected">Collected</option><option value="missing">Missing</option><option value="unknown">Unknown</option></select>
-          <div className="marker-list">{filtered.slice(0, 1200).map(marker => <button key={marker.id} className={selectedMarker?.id === marker.id ? 'active' : ''} onClick={() => setSelectedMarker(marker)}><b>{marker.name}</b><small>{marker.category}</small><i>{progress[marker.id] ?? 'unknown'}</i></button>)}</div>
+          <div className="marker-list">{filtered.slice(0, 100).map(marker => <button key={marker.id} className={selectedMarker?.id === marker.id ? 'active' : ''} onClick={() => setSelectedMarker(marker)}><b>{marker.name}</b><small>{marker.category}</small><i>{progress[marker.id] ?? 'unknown'}</i></button>)}</div>
+          {filtered.length > 100 && <p className="list-limit">Showing 100 of {filtered.length.toLocaleString()} markers. Search or filter to narrow the list.</p>}
           {selectedMarker && <div className="detail"><small>SELECTED MARKER</small><b>{selectedMarker.name}</b><div><button onClick={() => setMarkerState(selectedMarker, 'collected')}>Collected</button><button onClick={() => setMarkerState(selectedMarker, 'missing')}>Missing</button><button onClick={() => setMarkerState(selectedMarker, 'unknown')}>Reset</button></div></div>}
         </aside>
       </section>

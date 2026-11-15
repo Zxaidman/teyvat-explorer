@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -77,7 +77,7 @@ assertMeta(meta);
 assertLabels(labels);
 assertPoints(points);
 
-const tempRoot = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), 'teyvat-map-')));
+const tempRoot = await mkdtemp(join(tmpdir(), 'teyvat-map-'));
 try {
   const archivePath = join(tempRoot, 'snapshot.tar.gz');
   const archiveResponse = await fetchResponse(fullArchive.browser_download_url);

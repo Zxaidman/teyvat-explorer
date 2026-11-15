@@ -34,11 +34,13 @@ export function parseOfficialMeta(input: unknown): OfficialMeta {
   const mapVersion = typeof value.mapVersion === 'string' ? value.mapVersion.trim() : '';
   const minZoom = finiteNumber(value.minZoom);
   const maxZoom = finiteNumber(value.maxZoom);
+  // Prefer the release-relative tile pyramid, which we publish with the app.
+  // CDN is only a fallback for older snapshots without bundled tiles.
   const tileUrlTemplate =
-    typeof value.cdnTileUrlTemplate === 'string'
-      ? value.cdnTileUrlTemplate
-      : typeof value.tileUrlTemplate === 'string'
-        ? value.tileUrlTemplate
+    typeof value.tileUrlTemplate === 'string' && value.tileUrlTemplate.trim()
+      ? value.tileUrlTemplate.trim()
+      : typeof value.cdnTileUrlTemplate === 'string'
+        ? value.cdnTileUrlTemplate.trim()
         : '';
   const origin = requiredPair(value.origin, 'origin');
   const totalSize = requiredPair(value.totalSize, 'totalSize');
@@ -60,8 +62,8 @@ export function parseOfficialMeta(input: unknown): OfficialMeta {
   if (origin.some(coordinate => !Number.isFinite(coordinate))) {
     throw new Error('Official metadata origin contains invalid coordinates.');
   }
-  if (tileUrlTemplate.startsWith('https://') === false) {
-    throw new Error('Official CDN tile URL must use HTTPS.');
+  if (!tileUrlTemplate.startsWith('tiles/') && !tileUrlTemplate.startsWith('https://')) {
+    throw new Error('Official tile URL must be a snapshot-relative tiles/ path or use HTTPS.');
   }
 
   return { mapId, mapVersion, origin, totalSize, minZoom, maxZoom, tileUrlTemplate };

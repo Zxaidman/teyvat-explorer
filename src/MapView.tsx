@@ -41,12 +41,16 @@ function MarkerLayer({ markers, meta, onSelect }: {
 }) {
   const map = useMap();
   useEffect(() => {
+    // Canvas avoids creating one SVG element per point for the ~90k-point official dataset.
+    const renderer = L.canvas({ padding: 0.5 });
+    renderer.addTo(map);
     const group = L.layerGroup();
     for (const marker of markers) {
       // Underground markers remain in the imported dataset until floor switching is implemented.
       if (marker.z !== undefined && marker.z !== 0) continue;
       const pixel = gameToPixel(meta, marker.x, marker.y);
       const pin = L.circleMarker([meta.totalSize[1] - pixel.y, pixel.x], {
+        renderer,
         radius: 5, color: '#f1d28b', weight: 1, fillColor: '#9b6b35', fillOpacity: 0.9,
       });
       pin.bindTooltip(marker.name);
@@ -54,7 +58,10 @@ function MarkerLayer({ markers, meta, onSelect }: {
       group.addLayer(pin);
     }
     group.addTo(map);
-    return () => { map.removeLayer(group); };
+    return () => {
+      map.removeLayer(group);
+      map.removeLayer(renderer);
+    };
   }, [map, markers, meta, onSelect]);
   return null;
 }

@@ -44,7 +44,8 @@ export async function replaceOfficialSnapshot(
   const db = await database;
   const tx = db.transaction(['markers', 'settings'], 'readwrite');
   await tx.objectStore('markers').clear();
-  for (const marker of markers) await tx.objectStore('markers').put(marker);
+  const markerWrites = markers.map(marker => tx.objectStore('markers').put(marker));
+  await Promise.all(markerWrites);
   await tx.objectStore('settings').put({ key: 'officialMeta', value: meta });
   await tx.objectStore('settings').put({ key: 'officialLabels', value: labels });
   await tx.objectStore('settings').put({ key: 'officialSourceCommit', value: sourceCommit });

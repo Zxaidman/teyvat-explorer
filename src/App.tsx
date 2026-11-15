@@ -5,14 +5,21 @@ import {
 } from './db';
 import { parseOfficialLabels, parseOfficialMeta, parseOfficialPoints } from './data/official';
 import type { OfficialManifest } from './data/manifest';
+import { verifySnapshotFile } from './data/manifest';
 import type { Marker, OfficialMeta, ProgressRecord, ProgressState } from './types';
 
 const MANIFEST_URL = `${import.meta.env.BASE_URL}data/manifest.json`;
 
-async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(url, { signal });
+async function fetchText(url: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(url, { signal, cache: 'no-cache' });
   if (!response.ok) throw new Error(`Map data request failed (${response.status}).`);
-  return response.json() as Promise<unknown>;
+  return response.text();
+}
+
+async function fetchVerifiedJson(url: string, expectedHash: string, signal: AbortSignal): Promise<unknown> {
+  const content = await fetchText(url, signal);
+  if (!(await verifySnapshotFile(content, expectedHash))) throw new Error('Downloaded map data failed its SHA-256 integrity check.');
+  return JSON.parse(content) as unknown;
 }
 
 export default function App() {
@@ -30,11 +37,13 @@ export default function App() {
     let active = true;
 
     async function initialise() {
+      let savedSnapshotAvailable = false;
       try {
         const [savedMarkers, savedProgress, savedMeta, savedSource] = await Promise.all([
           getMarkers(), getProgress(), getSetting('officialMeta'), getSetting('officialSourceCommit'),
         ]);
         if (!active) return;
+        savedSnapshotAvailable = savedMarkers.length > 0;
         setMarkers(savedMarkers);
         setProgress(Object.fromEntries(savedProgress.map((r: ProgressRecord) => [r.markerId, r.state])));
         if (savedMeta?.value) setMeta(savedMeta.value as OfficialMeta);
@@ -43,11 +52,13 @@ export default function App() {
           : 'Fetching the official map for your first visit…');
 
         const manifestUrl = new URL(MANIFEST_URL, window.location.href);
-        const manifestValue = await fetchJson(manifestUrl.toString(), controller.signal);
-        const manifest = manifestValue as OfficialManifest;
+        const manifestText = await fetchText(manifestUrl.toString(), controller.signal);
+        const manifest = JSON.parse(manifestText) as OfficialManifest;
         if (
-          manifest.schemaVersion !== 1 || !manifest.sourceCommit ||
-          !manifest.files?.meta || !manifest.files?.labels || !manifest.files?.points
+          manifest.schemaVersion !== 1 || !/^[a-f0-9]{40}$/.test(manifest.sourceCommit) ||
+          manifest.source !== 'kxxoling/genshin-map-data' ||
+          !manifest.files?.meta || !manifest.files?.labels || !manifest.files?.points ||
+          !manifest.checksums?.['meta.json'] || !manifest.checksums?.['labels.json'] || !manifest.checksums?.['points.json']
         ) throw new Error('The published map manifest is invalid.');
 
         if (savedSource?.value === manifest.sourceCommit && savedMarkers.length > 0) {
@@ -55,10 +66,16 @@ export default function App() {
           return;
         }
 
+        const resolveDataUrl = (path: string) => {
+          if (!['./meta.json', './labels.json', './points.json'].includes(path)) {
+            throw new Error('Map manifest contains an unexpected data path.');
+          }
+          return new URL(path, manifestUrl).toString();
+        };
         const [metaValue, labelsValue, pointsValue] = await Promise.all([
-          fetchJson(new URL(manifest.files.meta, manifestUrl).toString(), controller.signal),
-          fetchJson(new URL(manifest.files.labels, manifestUrl).toString(), controller.signal),
-          fetchJson(new URL(manifest.files.points, manifestUrl).toString(), controller.signal),
+          fetchVerifiedJson(resolveDataUrl(manifest.files.meta), manifest.checksums['meta.json'], controller.signal),
+          fetchVerifiedJson(resolveDataUrl(manifest.files.labels), manifest.checksums['labels.json'], controller.signal),
+          fetchVerifiedJson(resolveDataUrl(manifest.files.points), manifest.checksums['points.json'], controller.signal),
         ]);
         const parsedMeta = parseOfficialMeta(metaValue);
         const parsedLabels = parseOfficialLabels(labelsValue);
@@ -76,7 +93,7 @@ export default function App() {
       } catch (error) {
         if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
         const detail = error instanceof Error ? error.message : 'Unknown map sync error.';
-        setStatus(markers.length
+        setStatus(savedSnapshotAvailable
           ? `Using saved map data; automatic update failed: ${detail}`
           : `Could not load the official map data: ${detail}`);
       }

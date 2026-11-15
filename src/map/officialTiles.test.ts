@@ -66,7 +66,7 @@ describe('official snapshot import validation', () => {
     expect(() => parseOfficialMeta({
       mapId: 2, mapVersion: 'v', origin: [0, 0], totalSize: [1, 1],
       minZoom: -1, maxZoom: 0, tileUrlTemplate: 'http://example.com/{x}_{y}_{suffix}',
-    })).toThrow(/tiles\\/ path or use HTTPS/);
+    })).toThrow('Official tile URL must be a snapshot-relative tiles/ path or use HTTPS.');
   });
 
   it('walks nested labels and skips duplicate or malformed point records', () => {

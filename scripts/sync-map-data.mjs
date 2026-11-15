@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
-const upstream = 'https://raw.githubusercontent.com/kxxoling/genshin-map-data/main/data/teyvat';
+const upstream = 'https://raw.githubusercontent.com/kxxoling/genshin-map-data';
 const commitUrl = 'https://api.github.com/repos/kxxoling/genshin-map-data/commits/main';
 const outputDir = join(process.cwd(), 'public', 'data');
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { 'User-Agent': 'teyvat-explorer-map-sync' } });
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(60_000),
+    headers: { 'User-Agent': 'teyvat-explorer-map-sync' },
+  });
   if (!response.ok) throw new Error(`Fetch failed (${response.status}): ${url}`);
   return response.json();
 }
@@ -26,18 +29,26 @@ function assertLabels(labels) {
 }
 function assertPoints(points) {
   if (!Array.isArray(points) || points.length === 0) throw new Error('Upstream points.json is invalid.');
-  const sample = points.slice(0, Math.min(points.length, 100));
-  if (sample.some(p => !p || !Number.isFinite(Number(p.id)) ||
-      !Number.isFinite(Number(p.labelId)) || !Number.isFinite(Number(p.x)) || !Number.isFinite(Number(p.y)))) {
-    throw new Error('Upstream points.json contains invalid point records.');
+  const ids = new Set();
+  for (const point of points) {
+    if (!point || !Number.isSafeInteger(Number(point.id)) ||
+        !Number.isSafeInteger(Number(point.labelId)) ||
+        !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
+      throw new Error('Upstream points.json contains an invalid point record.');
+    }
+    const id = String(point.id);
+    if (ids.has(id)) throw new Error(`Upstream points.json contains duplicate point ID ${id}.`);
+    ids.add(id);
   }
 }
 
-const [commit, meta, labels, points] = await Promise.all([
-  fetchJson(commitUrl),
-  fetchJson(`${upstream}/meta.json`),
-  fetchJson(`${upstream}/labels.json`),
-  fetchJson(`${upstream}/points.json`),
+const commit = await fetchJson(commitUrl);
+if (!/^[a-f0-9]{40}$/.test(commit.sha ?? '')) throw new Error('Could not resolve a valid upstream commit SHA.');
+const snapshotBase = `${upstream}/${commit.sha}/data/teyvat`;
+const [meta, labels, points] = await Promise.all([
+  fetchJson(`${snapshotBase}/meta.json`),
+  fetchJson(`${snapshotBase}/labels.json`),
+  fetchJson(`${snapshotBase}/points.json`),
 ]);
 assertMeta(meta);
 assertLabels(labels);

@@ -31,3 +31,22 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
 export async function getSetting(key: string): Promise<{ key: string; value: unknown } | undefined> {
   return (await database).get('settings', key);
 }
+/**
+ * Replaces marker data and its version metadata in one IndexedDB transaction.
+ * User progress lives in a separate store and is deliberately preserved.
+ */
+export async function replaceOfficialSnapshot(
+  markers: Marker[],
+  meta: unknown,
+  labels: [number, string][],
+  sourceCommit: string,
+): Promise<void> {
+  const db = await database;
+  const tx = db.transaction(['markers', 'settings'], 'readwrite');
+  await tx.objectStore('markers').clear();
+  for (const marker of markers) await tx.objectStore('markers').put(marker);
+  await tx.objectStore('settings').put({ key: 'officialMeta', value: meta });
+  await tx.objectStore('settings').put({ key: 'officialLabels', value: labels });
+  await tx.objectStore('settings').put({ key: 'officialSourceCommit', value: sourceCommit });
+  await tx.done;
+}

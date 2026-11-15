@@ -109,7 +109,7 @@ export default function App() {
           <input hidden ref={pointsInput} type="file" accept="application/json" onChange={e => importPoints(e.target.files?.[0])}/>
         </nav>
       </header>
-      <section className="intro"><div><small>PLAYER WORKSPACE · ASIA SERVER</small><h1>Explore Teyvat</h1><p>Official map tiles, collectible filters and your manually verified progress.</p></div><aside><small>UID · DISPLAY ONLY</small><b>877172691</b></aside></section>
+      <section className="intro"><div><small>PLAYER WORKSPACE · ASIA SERVER</small><h1>Explore Teyvat</h1><p>Official map tiles, collectible filters and your manually verified progress.</p></div></section>
       <section className="stats"><article><b>{markers.length.toLocaleString()}</b>Imported markers</article><article><b>{collected}</b>Collected</article><article><b>{missing}</b>Marked missing</article><article><b>{unknown.toLocaleString()}</b>Unknown</article></section>
       <p className="status">{status}</p>
       <section className="workspace">

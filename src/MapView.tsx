@@ -61,7 +61,7 @@ class MarkerCanvasLayer extends L.Layer {
   private onSelect: (marker: Marker) => void;
 
   constructor(
-    private readonly markers: Marker[],
+    markers: Marker[],
     private readonly meta: OfficialMeta,
     onSelect: (marker: Marker) => void,
   ) {

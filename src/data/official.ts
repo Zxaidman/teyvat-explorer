@@ -29,8 +29,9 @@ function requiredPair(value: unknown, field: string): [number, number] {
 export function parseOfficialMeta(input: unknown): OfficialMeta {
   const value = object(input);
   if (!value) throw new Error('meta.json must contain a JSON object.');
+
   const mapId = finiteNumber(value.mapId);
-  const mapVersion = typeof value.mapVersion === 'string' ? value.mapVersion : '';
+  const mapVersion = typeof value.mapVersion === 'string' ? value.mapVersion.trim() : '';
   const minZoom = finiteNumber(value.minZoom);
   const maxZoom = finiteNumber(value.maxZoom);
   const tileUrlTemplate =
@@ -39,27 +40,31 @@ export function parseOfficialMeta(input: unknown): OfficialMeta {
       : typeof value.tileUrlTemplate === 'string'
         ? value.tileUrlTemplate
         : '';
+  const origin = requiredPair(value.origin, 'origin');
+  const totalSize = requiredPair(value.totalSize, 'totalSize');
 
   if (
-    mapId === undefined ||
+    mapId === undefined || mapId <= 0 ||
     !mapVersion ||
-    minZoom === undefined ||
-    maxZoom === undefined ||
-    !tileUrlTemplate ||
-    !tileUrlTemplate.includes('{suffix}')
+    minZoom === undefined || maxZoom === undefined ||
+    !Number.isInteger(minZoom) || !Number.isInteger(maxZoom) || minZoom > maxZoom ||
+    !tileUrlTemplate.includes('{suffix}') ||
+    !tileUrlTemplate.includes('{x}') ||
+    !tileUrlTemplate.includes('{y}')
   ) {
-    throw new Error('meta.json is missing required map ID, version, zoom or tile-template fields.');
+    throw new Error('meta.json is missing valid map ID, version, zoom range or tile-template fields.');
+  }
+  if (totalSize.some(size => !Number.isFinite(size) || size <= 0)) {
+    throw new Error('Official metadata totalSize must contain positive dimensions.');
+  }
+  if (origin.some(coordinate => !Number.isFinite(coordinate))) {
+    throw new Error('Official metadata origin contains invalid coordinates.');
+  }
+  if (tileUrlTemplate.startsWith('https://') === false) {
+    throw new Error('Official CDN tile URL must use HTTPS.');
   }
 
-  return {
-    mapId,
-    mapVersion,
-    origin: requiredPair(value.origin, 'origin'),
-    totalSize: requiredPair(value.totalSize, 'totalSize'),
-    minZoom,
-    maxZoom,
-    tileUrlTemplate,
-  };
+  return { mapId, mapVersion, origin, totalSize, minZoom, maxZoom, tileUrlTemplate };
 }
 
 export function parseOfficialLabels(input: unknown): Map<number, string> {
@@ -70,11 +75,14 @@ export function parseOfficialLabels(input: unknown): Map<number, string> {
       const item = object(node);
       if (!item) continue;
       const id = finiteNumber(item.id);
-      if (id !== undefined && typeof item.name === 'string') labels.set(id, item.name);
+      if (id !== undefined && typeof item.name === 'string' && item.name.trim()) {
+        labels.set(id, item.name.trim());
+      }
       if (Array.isArray(item.children)) visit(item.children);
     }
   };
   visit(input);
+  if (labels.size === 0) throw new Error('labels.json did not contain any valid labels.');
   return labels;
 }
 
@@ -87,6 +95,7 @@ export function parseOfficialPoints(
   }
 
   const markers: Marker[] = [];
+  const seenIds = new Set<string>();
   let skipped = 0;
   for (const point of input) {
     const item = object(point);
@@ -98,17 +107,28 @@ export function parseOfficialPoints(
     const labelId = finiteNumber(item.labelId);
     const x = finiteNumber(item.x);
     const y = finiteNumber(item.y);
-    if (id === undefined || labelId === undefined || x === undefined || y === undefined) {
+    if (
+      id === undefined || labelId === undefined || x === undefined || y === undefined ||
+      !Number.isInteger(id) || !Number.isInteger(labelId)
+    ) {
       skipped++;
       continue;
     }
 
+    const sourceId = String(id);
+    if (seenIds.has(sourceId)) {
+      skipped++;
+      continue;
+    }
+    seenIds.add(sourceId);
+
+    const label = labels.get(labelId);
     markers.push({
-      id: `official:${id}`,
-      sourceId: String(id),
+      id: `official:${sourceId}`,
+      sourceId,
       labelId,
-      name: labels.get(labelId) ?? `Map point ${id}`,
-      category: labels.get(labelId) ?? `Unknown category (${labelId})`,
+      name: label ?? `Map point ${sourceId}`,
+      category: label ?? `Unknown category (${labelId})`,
       x,
       y,
       ...(finiteNumber(item.z) !== undefined ? { z: finiteNumber(item.z) } : {}),
@@ -125,7 +145,7 @@ export function parseOfficialPoints(
       imported: markers.length,
       skipped,
       warnings: [
-        ...(skipped ? [`${skipped} records were skipped due to missing id, labelId or coordinates.`] : []),
+        ...(skipped ? [`${skipped} records were skipped due to invalid or duplicate IDs, labels or coordinates.`] : []),
         'Underground floor markers (z != 0) are retained but hidden until floor selection is implemented.',
       ],
     },

@@ -1,32 +1,91 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import MapView from './MapView';
-import { getMarkers, getProgress, getSetting, replaceMarkers, saveProgress, saveSetting } from './db';
+import {
+  getMarkers, getProgress, getSetting, replaceOfficialSnapshot, saveProgress,
+} from './db';
 import { parseOfficialLabels, parseOfficialMeta, parseOfficialPoints } from './data/official';
+import type { OfficialManifest } from './data/manifest';
 import type { Marker, OfficialMeta, ProgressRecord, ProgressState } from './types';
+
+const MANIFEST_URL = `${import.meta.env.BASE_URL}data/manifest.json`;
+
+async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Map data request failed (${response.status}).`);
+  return response.json() as Promise<unknown>;
+}
 
 export default function App() {
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [progress, setProgress] = useState<Record<string, ProgressState>>({});
   const [meta, setMeta] = useState<OfficialMeta | null>(null);
-  const [labels, setLabels] = useState<Map<number, string>>(new Map());
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [stateFilter, setStateFilter] = useState('unresolved');
-  const [status, setStatus] = useState('Import official points.json, labels.json and meta.json to load the map.');
+  const [status, setStatus] = useState('Loading your saved map data…');
   const [selectedMarker, setSelectedMarker] = useState<Marker | null>(null);
-  const pointsInput = useRef<HTMLInputElement>(null);
-  const labelsInput = useRef<HTMLInputElement>(null);
-  const metaInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([getMarkers(), getProgress(), getSetting('officialMeta'), getSetting('officialLabels')])
-      .then(([savedMarkers, savedProgress, savedMeta, savedLabels]) => {
+    const controller = new AbortController();
+    let active = true;
+
+    async function initialise() {
+      try {
+        const [savedMarkers, savedProgress, savedMeta, savedSource] = await Promise.all([
+          getMarkers(), getProgress(), getSetting('officialMeta'), getSetting('officialSourceCommit'),
+        ]);
+        if (!active) return;
         setMarkers(savedMarkers);
         setProgress(Object.fromEntries(savedProgress.map((r: ProgressRecord) => [r.markerId, r.state])));
         if (savedMeta?.value) setMeta(savedMeta.value as OfficialMeta);
-        if (savedLabels?.value) setLabels(new Map(savedLabels.value as [number, string][]));
-      })
-      .catch(() => setStatus('Local database could not be opened.'));
+        setStatus(savedMarkers.length
+          ? `Loaded ${savedMarkers.length.toLocaleString()} cached markers. Checking for map updates…`
+          : 'Fetching the official map for your first visit…');
+
+        const manifestUrl = new URL(MANIFEST_URL, window.location.href);
+        const manifestValue = await fetchJson(manifestUrl.toString(), controller.signal);
+        const manifest = manifestValue as OfficialManifest;
+        if (
+          manifest.schemaVersion !== 1 || !manifest.sourceCommit ||
+          !manifest.files?.meta || !manifest.files?.labels || !manifest.files?.points
+        ) throw new Error('The published map manifest is invalid.');
+
+        if (savedSource?.value === manifest.sourceCommit && savedMarkers.length > 0) {
+          if (active) setStatus(`Map is up to date · game ${manifest.gameVersion ?? 'current'} · ${manifest.pointCount.toLocaleString()} points.`);
+          return;
+        }
+
+        const [metaValue, labelsValue, pointsValue] = await Promise.all([
+          fetchJson(new URL(manifest.files.meta, manifestUrl).toString(), controller.signal),
+          fetchJson(new URL(manifest.files.labels, manifestUrl).toString(), controller.signal),
+          fetchJson(new URL(manifest.files.points, manifestUrl).toString(), controller.signal),
+        ]);
+        const parsedMeta = parseOfficialMeta(metaValue);
+        const parsedLabels = parseOfficialLabels(labelsValue);
+        const parsedPoints = parseOfficialPoints(pointsValue, parsedLabels);
+        await replaceOfficialSnapshot(
+          parsedPoints.markers, parsedMeta, [...parsedLabels.entries()], manifest.sourceCommit,
+        );
+        if (!active) return;
+        setMarkers(parsedPoints.markers);
+        setMeta(parsedMeta);
+        setSelectedMarker(null);
+        setStatus(
+          `Updated to game ${manifest.gameVersion ?? 'latest'} · ${parsedPoints.report.imported.toLocaleString()} markers · source ${manifest.sourceCommit.slice(0, 7)}.`,
+        );
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        const detail = error instanceof Error ? error.message : 'Unknown map sync error.';
+        setStatus(markers.length
+          ? `Using saved map data; automatic update failed: ${detail}`
+          : `Could not load the official map data: ${detail}`);
+      }
+    }
+
+    void initialise();
+    return () => { active = false; controller.abort(); };
+  // Run once on startup; map data is refreshed from the published manifest.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const categories = useMemo(() => [...new Set(markers.map(m => m.category))].sort(), [markers]);
@@ -38,43 +97,6 @@ export default function App() {
     const matchesSearch = `${marker.name} ${marker.category}`.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesState && matchesSearch;
   }), [markers, category, stateFilter, progress, search]);
-
-  async function importMeta(file?: File) {
-    if (!file) return;
-    try {
-      const parsed = parseOfficialMeta(JSON.parse(await file.text()));
-      await saveSetting('officialMeta', parsed);
-      setMeta(parsed);
-      setStatus(`Map metadata loaded: game map ${parsed.mapId}, version ${parsed.mapVersion}, ${parsed.totalSize.join(' × ')} pixels.`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Metadata import failed.');
-    }
-  }
-
-  async function importLabels(file?: File) {
-    if (!file) return;
-    try {
-      const parsed = parseOfficialLabels(JSON.parse(await file.text()));
-      await saveSetting('officialLabels', [...parsed.entries()]);
-      setLabels(parsed);
-      setStatus(`Loaded ${parsed.size} marker labels. Re-import points.json to apply category names.`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Labels import failed.');
-    }
-  }
-
-  async function importPoints(file?: File) {
-    if (!file) return;
-    try {
-      const parsed = parseOfficialPoints(JSON.parse(await file.text()), labels);
-      await replaceMarkers(parsed.markers);
-      setMarkers(parsed.markers);
-      setSelectedMarker(null);
-      setStatus(`Imported ${parsed.report.imported.toLocaleString()} points; skipped ${parsed.report.skipped}. ${parsed.report.warnings.join(' ')}`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Point import failed. Existing data was preserved.');
-    }
-  }
 
   async function setMarkerState(marker: Marker, state: ProgressState) {
     const record = { markerId: marker.id, state, updatedAt: new Date().toISOString() };
@@ -98,24 +120,16 @@ export default function App() {
   return (
     <main>
       <header>
-        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.3.0 · OFFICIAL SNAPSHOT V7.2.0</small></div>
-        <nav>
-          <button onClick={exportProgress}>Export progress</button>
-          <button onClick={() => metaInput.current?.click()}>Import meta.json</button>
-          <button onClick={() => labelsInput.current?.click()}>Import labels.json</button>
-          <button onClick={() => pointsInput.current?.click()}>Import points.json</button>
-          <input hidden ref={metaInput} type="file" accept="application/json" onChange={e => importMeta(e.target.files?.[0])}/>
-          <input hidden ref={labelsInput} type="file" accept="application/json" onChange={e => importLabels(e.target.files?.[0])}/>
-          <input hidden ref={pointsInput} type="file" accept="application/json" onChange={e => importPoints(e.target.files?.[0])}/>
-        </nav>
+        <div className="brand">✦ TEYVAT EXPLORER<small>VERSION 0.4.0 · AUTOMATIC MAP SYNC</small></div>
+        <nav><button onClick={exportProgress}>Export progress</button></nav>
       </header>
-      <section className="intro"><div><small>PLAYER WORKSPACE · ASIA SERVER</small><h1>Explore Teyvat</h1><p>Official map tiles, collectible filters and your manually verified progress.</p></div></section>
-      <section className="stats"><article><b>{markers.length.toLocaleString()}</b>Imported markers</article><article><b>{collected}</b>Collected</article><article><b>{missing}</b>Marked missing</article><article><b>{unknown.toLocaleString()}</b>Unknown</article></section>
-      <p className="status">{status}</p>
+      <section className="intro"><div><small>PLAYER WORKSPACE · ASIA SERVER</small><h1>Explore Teyvat</h1><p>Official map tiles, automatically updated collectibles and locally saved progress.</p></div></section>
+      <section className="stats"><article><b>{markers.length.toLocaleString()}</b>Map markers</article><article><b>{collected}</b>Collected</article><article><b>{missing}</b>Marked missing</article><article><b>{unknown.toLocaleString()}</b>Unknown</article></section>
+      <p className="status" role="status" aria-live="polite">{status}</p>
       <section className="workspace">
-        <div className="map"><div className="map-heading"><div><small>OFFICIAL TEYVAT MAP</small><b>{meta ? `Map ${meta.mapId} · ${meta.mapVersion.slice(0, 8)}` : 'Map metadata not loaded'}</b></div></div>
+        <div className="map"><div className="map-heading"><div><small>OFFICIAL TEYVAT MAP</small><b>{meta ? `Map ${meta.mapId} · ${meta.mapVersion.slice(0, 8)}` : 'Loading official map…'}</b></div></div>
           <div className="map-canvas">{meta ? <MapView markers={filtered} meta={meta} onSelect={setSelectedMarker}/> :
-            <div className="empty"><b>Load official snapshot data</b><p>Import meta.json, labels.json and points.json from the extracted snapshot.</p><a href="https://github.com/kxxoling/genshin-map-data/releases" target="_blank" rel="noreferrer">Download official map snapshot ↗</a></div>}</div>
+            <div className="empty"><b>Preparing your map</b><p>The latest official map data is downloaded automatically on first visit.</p></div>}</div>
         </div>
         <aside className="panel"><small>MARKER EXPLORER</small><h2>Find collectibles</h2>
           <input placeholder="Search marker category" value={search} onChange={e => setSearch(e.target.value)}/>
@@ -125,7 +139,7 @@ export default function App() {
           {selectedMarker && <div className="detail"><small>SELECTED MARKER</small><b>{selectedMarker.name}</b><div><button onClick={() => setMarkerState(selectedMarker, 'collected')}>Collected</button><button onClick={() => setMarkerState(selectedMarker, 'missing')}>Missing</button><button onClick={() => setMarkerState(selectedMarker, 'unknown')}>Reset</button></div></div>}
         </aside>
       </section>
-      <footer>Local IndexedDB storage · No HoYoverse credentials requested · Underground layers are retained but not yet rendered</footer>
+      <footer>Map data auto-synced from kxxoling/genshin-map-data · Progress stored locally in IndexedDB · No HoYoverse login required</footer>
     </main>
   );
 }

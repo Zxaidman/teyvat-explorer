@@ -254,6 +254,7 @@ export default function MapView({ markers, meta, selectedMarker, onSelect }: {
       style={{ height: '100%', width: '100%', background: '#182a28' }}>
       <OfficialTiles meta={meta} />
       <MarkerLayer markers={markers} meta={meta} onSelect={onSelect} />
+      <SelectedMarkerView marker={selectedMarker} meta={meta} />
     </MapContainer>
   );
 }

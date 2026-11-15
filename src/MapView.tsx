@@ -24,7 +24,7 @@ class OfficialGridLayer extends L.GridLayer {
     const image = document.createElement('img');
     image.alt = '';
     image.decoding = 'async';
-    image.loading = 'lazy';
+    image.loading = 'eager';
     image.referrerPolicy = 'no-referrer';
     image.onload = () => done(undefined, image);
     let usedCdnFallback = false;

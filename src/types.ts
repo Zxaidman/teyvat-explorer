@@ -25,6 +25,7 @@ export interface OfficialMeta {
   minZoom: number;
   maxZoom: number;
   tileUrlTemplate: string;
+  cdnTileUrlTemplate?: string;
 }
 
 export interface ImportReport {

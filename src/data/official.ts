@@ -66,7 +66,11 @@ export function parseOfficialMeta(input: unknown): OfficialMeta {
     throw new Error('Official tile URL must be a snapshot-relative tiles/ path or use HTTPS.');
   }
 
-  return { mapId, mapVersion, origin, totalSize, minZoom, maxZoom, tileUrlTemplate };
+  const cdnTileUrlTemplate = typeof value.cdnTileUrlTemplate === 'string' && value.cdnTileUrlTemplate.startsWith('https://')
+    ? value.cdnTileUrlTemplate.trim()
+    : undefined;
+
+  return { mapId, mapVersion, origin, totalSize, minZoom, maxZoom, tileUrlTemplate, ...(cdnTileUrlTemplate ? { cdnTileUrlTemplate } : {}) };
 }
 
 export function parseOfficialLabels(input: unknown): Map<number, string> {
